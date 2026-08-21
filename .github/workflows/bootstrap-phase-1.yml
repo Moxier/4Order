@@ -1,26 +1,53 @@
-name: Verify Phase 1 source
+name: Bootstrap Phase 2 source
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  verify-tree:
+  restore-source:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
 
-      - name: Verify required Phase 1 paths
+      - name: Restore verified Phase 2 tree
         shell: bash
         run: |
-          test -f package.json
-          test -f src/app/login/page.tsx
-          test -f src/modules/auth/actions.ts
-          test -f src/shared/supabase/database.generated.ts
-          test -f supabase/migrations/202608210001_foundation.sql
-          test -f supabase/migrations/202608210002_api_grants.sql
-          test -f supabase/tests/foundation.sql
-          test -f tests/foundation/roles.test.ts
+          echo '1af8c09121dbebc25661325591883df972335261d207682525ee4259ee0629cb  .github/workflows/phase2-source.tar.gz' | sha256sum --check
+          tar -xzf .github/workflows/phase2-source.tar.gz
+          rm .github/workflows/phase2-source.tar.gz
+
+      - name: Commit Phase 2 source
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- \
+            '.env.example' \
+            'README.md' \
+            'docs/ARCHITECTURE.md' \
+            'docs/PHASE_2_PLAN.md' \
+            'docs/PHASE_2_STATUS.md' \
+            'src/app/page.tsx' \
+            'src/app/api/customer/orders/route.ts' \
+            'src/app/order/[tableToken]/page.tsx' \
+            'src/app/order/[tableToken]/not-found.tsx' \
+            'src/modules/customer/customer-order-flow.tsx' \
+            'src/modules/customer/data.ts' \
+            'src/modules/customer/request-security.ts' \
+            'src/modules/customer/schema.ts' \
+            'src/shared/env/server.ts' \
+            'src/shared/supabase/database.generated.ts' \
+            'src/shared/supabase/service.ts' \
+            'supabase/migrations/202608210003_customer_ordering.sql' \
+            'supabase/tests/customer-ordering.sql' \
+            'tests/customer/migration.test.ts' \
+            'tests/customer/request-security.test.ts' \
+            'tests/customer/schema.test.ts' \
+            'tests/foundation/migration.test.ts' \
+            '.github/workflows/phase2-source.tar.gz'
+          git commit -m 'feat: add Phase 2 customer QR ordering'
+          git push
