@@ -1,11 +1,13 @@
 # 4Order
 
 Mobile-first QR restaurant ordering for a small restaurant in Thailand. The
-repository is currently at **Phase 1: Foundation**. Customer ordering and the
-operational kitchen/cashier workflows are intentionally not implemented yet.
+repository is currently at **Phase 2: Customer QR ordering**. Customers can
+submit free-form Thai orders from an opaque table-token URL; kitchen and
+cashier operations remain intentionally deferred.
 
-See [the architecture](docs/ARCHITECTURE.md), [the Phase 1 plan](docs/PHASE_1_PLAN.md),
-and the product requirements in [SPEC.md](SPEC.md).
+See [the architecture](docs/ARCHITECTURE.md),
+[the Phase 2 plan](docs/PHASE_2_PLAN.md), and the product requirements in
+[SPEC.md](SPEC.md).
 
 ## Stack
 
@@ -70,6 +72,19 @@ Next.js 16 requires Node.js 20.9 or newer.
 
    Open `http://localhost:3000`.
 
+### Try customer ordering
+
+After `pnpm db:reset`, open Supabase Studio at `http://localhost:54323` and
+read one demo row from `restaurant_tables`. Use its opaque `public_token` in:
+
+```text
+http://localhost:3000/order/{public_token}
+```
+
+The customer enters one free-form item per line, reviews the exact text, and
+submits it. Retrying the same network request returns the original order number
+instead of creating another order. No catalog selection is used in V1.
+
 ### Demo staff accounts
 
 All three use the local password stored only in `DEMO_STAFF_PASSWORD`:
@@ -118,6 +133,7 @@ Run database verification separately while local Supabase is active:
 ```bash
 pnpm db:reset
 pnpm db:lint
+pnpm db:test
 ```
 
 ## Production deployment
@@ -144,7 +160,7 @@ pnpm db:lint
 
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY` (server-only; required by later public endpoints)
+   - `SUPABASE_SERVICE_ROLE_KEY` (server-only; required by customer ordering)
 
 5. Configure the production Supabase Auth site URL and allowed redirect URLs to
    the exact HTTPS application origin.
@@ -161,8 +177,9 @@ values ('AUTH-USER-UUID', 'ชื่อผู้ดูแล', 'ADMIN');
 
 ## Security notes
 
-- Customer QR URLs will use `restaurant_tables.public_token`, never table UUIDs.
-- Public customer mutations will be server-only and token-resolved in Phase 2.
+- Customer QR URLs use `restaurant_tables.public_token`, never table UUIDs.
+- Customer mutations are handled by a same-origin server route and a narrowly
+  granted transaction function; browsers never receive the service-role key.
 - Staff pages already enforce roles in server code and PostgreSQL RLS.
 - `SUPABASE_SERVICE_ROLE_KEY`, `.env.local`, and real passwords must never be
   committed or exposed through `NEXT_PUBLIC_` variables.
@@ -171,10 +188,10 @@ values ('AUTH-USER-UUID', 'ชื่อผู้ดูแล', 'ADMIN');
 
 ## Current scope
 
-Implemented now: project structure, relational schema, migrations, RLS, table
-sessions, Thai demo table data, staff provisioning, authentication, role guards,
-and protected placeholder routes.
+Implemented now: the Phase 1 foundation plus public QR token resolution,
+free-form Thai order confirmation/submission, local draft retention,
+idempotent retries, transaction-safe active sessions, and additional orders.
 
-Not implemented yet: `/order/{tableToken}`, order submission, realtime kitchen
-orders, cashier payment UI, customer actions/feedback, admin tools, printing,
-and PWA behavior. These remain assigned to later phases in `SPEC.md`.
+Not implemented yet: realtime kitchen orders, cashier payment UI, customer
+service requests/feedback, admin tools, printing, and PWA behavior. These remain
+assigned to later phases in `SPEC.md`.

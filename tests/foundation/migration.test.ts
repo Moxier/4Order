@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 const migration = [
   "202608210001_foundation.sql",
   "202608210002_api_grants.sql",
+  "202608210003_customer_ordering.sql",
 ]
   .map((file) => readFileSync(join(process.cwd(), "supabase/migrations", file), "utf8"))
   .join("\n");

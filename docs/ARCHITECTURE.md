@@ -57,10 +57,13 @@ The QR URL contains only a random, revocable table token. A public request is
 validated on the server, and the server resolves the table from that token.
 The client never supplies a trusted table or session ID separately.
 
-Public mutations will be exposed as narrow server endpoints. They will use
-schema validation, idempotency keys, transaction-safe session creation, and
-rate limiting. Customer text is stored unchanged and rendered as text, never
-as HTML.
+The Phase 2 customer-order mutation is exposed as a narrow same-origin JSON
+route handler. It validates all input, uses a server-only service-role client,
+and delegates the state change to one PostgreSQL function. That function locks
+the table row, creates or reuses the active session, inserts the order and its
+nonblank operational lines, rate-limits by table, and returns the original
+result for an idempotent retry. Customer text is stored unchanged and rendered
+as text, never as HTML.
 
 ### Staff traffic
 
@@ -152,7 +155,7 @@ created.
 
 | Risk | Mitigation |
 | --- | --- |
-| Two first orders create two sessions | Partial unique index plus a transaction-safe database function in Phase 2 |
+| Two first orders create two sessions | Partial unique index plus the Phase 2 table-row lock and transactional database function |
 | Network retry duplicates an order | Client UUID idempotency key plus unique database constraint |
 | QR token leaks or is guessed | High-entropy token, rate limiting, token rotation, disabled-table check |
 | Realtime event is missed | Re-fetch authoritative state after reconnect/focus and merge by ID |

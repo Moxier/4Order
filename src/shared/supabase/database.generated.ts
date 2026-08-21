@@ -475,7 +475,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      submit_customer_order: {
+        Args: {
+          p_idempotency_key: string
+          p_original_text: string
+          p_table_token: string
+        }
+        Returns: {
+          is_duplicate: boolean
+          order_number: number
+          table_name: string
+        }[]
+      }
     }
     Enums: {
       feedback_severity: "FEEDBACK" | "ISSUE" | "NEEDS_ASSISTANCE"
