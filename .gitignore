@@ -1,0 +1,23 @@
+# dependencies
+/node_modules
+
+# Next.js
+/.next
+/out
+
+# local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Supabase local state
+/supabase/.branches
+/supabase/.temp
+
+# tests and tooling
+/coverage
+*.tsbuildinfo
+
+# editor and OS files
+.DS_Store
+*.swp
