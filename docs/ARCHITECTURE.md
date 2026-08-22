@@ -2,10 +2,10 @@
 
 ## Decision summary
 
-4Order will be a modular monolith built as one Next.js App Router application.
-It will use Supabase for PostgreSQL, staff authentication, and (from Phase 3)
-realtime change delivery. The database is the authoritative state; realtime is
-only a notification/refresh mechanism.
+4Order is a modular monolith built as one Next.js App Router application. It
+uses Supabase for PostgreSQL, staff authentication, and Phase 3 realtime change
+delivery. The database is the authoritative state; realtime is only a
+notification/refresh mechanism.
 
 This keeps deployment and maintenance small enough for one restaurant while
 leaving clear boundaries for later hardware integrations.
@@ -28,7 +28,7 @@ Next.js application
 Supabase
   - PostgreSQL (authoritative state)
   - Auth (staff only)
-  - Realtime (staff updates in later phases)
+  - Realtime (kitchen refresh signals from Phase 3)
 
 Future local print agent (not V1 hardware integration)
   <- polls/receives PRINT_JOBS through a PrintService adapter
@@ -122,15 +122,17 @@ narrow public endpoints, controlled staff provisioning, and server jobs.
 - Important staff changes are recorded in `audit_logs` with actor, action,
   entity, timestamp, and compact JSON metadata.
 
-## Realtime and reconnection (later phase design)
+## Realtime and reconnection
 
-Kitchen and cashier screens will subscribe to relevant Supabase Realtime
-changes allowed by RLS. An event tells the client that state changed; it is not
-treated as the complete source of truth. Initial load, reconnect, visibility
-return, and event gaps all trigger an authoritative query. Client stores merge
-by stable IDs, preventing duplicate cards.
+The Phase 3 kitchen screen subscribes to `orders` and `order_lines` changes
+allowed by RLS. It explicitly supplies the authenticated staff JWT before
+joining the channel. An event only tells the client that state changed; it is
+not treated as the complete source of truth. Initial load, reconnect, online
+return, focus, visibility return, manual refresh, periodic safety refreshes, and
+Realtime events all trigger an authoritative query. The resulting read model is
+replaced by stable order IDs, preventing duplicate cards.
 
-Realtime is intentionally not implemented in Phase 1.
+Future cashier subscriptions will follow the same pattern.
 
 ## Printing seam (later phase design)
 

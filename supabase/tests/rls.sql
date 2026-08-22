@@ -56,14 +56,17 @@ select is(
   'kitchen can read customer orders through RLS'
 );
 
-update public.orders
-set status = 'ACKNOWLEDGED', acknowledged_at = now()
-where id = '83000000-0000-4000-8000-000000000001';
-
 select is(
-  (select status::text from public.orders where id = '83000000-0000-4000-8000-000000000001'),
+  (
+    select status::text
+    from public.transition_kitchen_order_status(
+      '83000000-0000-4000-8000-000000000001',
+      'NEW',
+      'ACKNOWLEDGED'
+    )
+  ),
   'ACKNOWLEDGED',
-  'kitchen can update operational order state'
+  'kitchen can update operational order state through the audited function'
 );
 
 select throws_ok(

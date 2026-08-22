@@ -41,11 +41,14 @@ test.afterEach(async () => {
 
   const { data: orders, error: orderLookupError } = await serviceClient
     .from("orders")
-    .select("id")
+    .select("id, session_id")
     .in("idempotency_key", keys);
   expect(orderLookupError).toBeNull();
 
   const orderIds = orders?.map((order) => order.id) ?? [];
+  const sessionIds = Array.from(
+    new Set(orders?.map((order) => order.session_id) ?? []),
+  );
   if (orderIds.length > 0) {
     const { error: lineDeleteError } = await serviceClient
       .from("order_lines")
@@ -59,6 +62,19 @@ test.afterEach(async () => {
     .delete()
     .in("idempotency_key", keys);
   expect(orderDeleteError).toBeNull();
+
+  for (const sessionId of sessionIds) {
+    const { count, error: countError } = await serviceClient
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", sessionId);
+    expect(countError).toBeNull();
+    if (count === 0) {
+      expect(
+        (await serviceClient.from("table_sessions").delete().eq("id", sessionId)).error,
+      ).toBeNull();
+    }
+  }
 });
 
 test("real HTTP submission is idempotent and enforces the full origin", async ({

@@ -1,18 +1,19 @@
 # 4Order
 
 Mobile-first QR restaurant ordering for a small restaurant in Thailand. The
-repository is currently at **Phase 2: Customer QR ordering**. Customers can
-submit free-form Thai orders from an opaque table-token URL; kitchen and
-cashier operations remain intentionally deferred.
+repository is currently at **Phase 3: Kitchen display**. Customers can submit
+free-form Thai orders from an opaque table-token URL, and authenticated kitchen
+staff receive and advance those orders in real time. Cashier operations remain
+intentionally deferred.
 
 See [the architecture](docs/ARCHITECTURE.md),
-[the Phase 2 plan](docs/PHASE_2_PLAN.md), and the product requirements in
-[SPEC.md](SPEC.md).
+[the Phase 3 plan](docs/PHASE_3_PLAN.md), [the Phase 3 status](docs/PHASE_3_STATUS.md),
+and the product requirements in [SPEC.md](SPEC.md).
 
 ## Stack
 
 - Next.js 16 App Router, React 19, TypeScript, and Tailwind CSS
-- Supabase PostgreSQL, Auth, and future Realtime delivery
+- Supabase PostgreSQL, Auth, and Realtime delivery
 - Zod validation
 - Vitest, ESLint, and TypeScript verification
 - pnpm package management
@@ -99,6 +100,18 @@ All three use the local password stored only in `DEMO_STAFF_PASSWORD`:
 | `admin@4order.local` | ADMIN | `/admin` |
 
 Do not use these accounts or their password in production.
+
+### Try the kitchen display
+
+Sign in as `kitchen@4order.local`, open `/kitchen`, and tap
+`เปิดเสียงแจ้งเตือน` once if audible alerts are wanted on that device. Submit an
+order from a customer QR page in another browser or phone. The card appears
+without a manual refresh and moves through `รับออเดอร์`, `เริ่มทำ`, and
+`ทำเสร็จแล้ว`.
+
+The board replaces its state from an authoritative RLS-protected query after
+Realtime signals, reconnects, focus/visibility returns, and periodic safety
+checks. A visible warning remains while the device is offline.
 
 ## Database workflow
 
@@ -209,10 +222,10 @@ values ('AUTH-USER-UUID', 'ชื่อผู้ดูแล', 'ADMIN');
 
 ## Current scope
 
-Implemented now: the Phase 1 foundation plus public QR token resolution,
-free-form Thai order confirmation/submission, local draft retention,
-idempotent retries, transaction-safe active sessions, and additional orders.
+Implemented now: the Phase 1 foundation, complete Phase 2 customer ordering and
+hardening, plus the Phase 3 realtime kitchen board, audited sequential status
+workflow, sound controls, and reconnect/resync behavior.
 
-Not implemented yet: realtime kitchen orders, cashier payment UI, customer
-service requests/feedback, admin tools, printing, and PWA behavior. These remain
-assigned to later phases in `SPEC.md`.
+Not implemented yet: cashier payment UI, customer service requests/feedback,
+admin tools, printing, and PWA behavior. These remain assigned to later phases
+in `SPEC.md`.

@@ -90,6 +90,9 @@ jobs:
           pnpm db:lint
           pnpm db:test
 
+      - name: Provision local demo staff for browser role tests
+        run: pnpm seed:staff
+
       - name: Run concurrent database test
         run: pnpm db:test:concurrency
 

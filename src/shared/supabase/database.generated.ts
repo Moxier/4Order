@@ -490,6 +490,18 @@ export type Database = {
           table_name: string
         }[]
       }
+      transition_kitchen_order_status: {
+        Args: {
+          p_expected_status: Database["public"]["Enums"]["order_status"]
+          p_order_id: string
+          p_target_status: Database["public"]["Enums"]["order_status"]
+        }
+        Returns: {
+          order_id: string
+          status: Database["public"]["Enums"]["order_status"]
+          updated_at: string
+        }[]
+      }
     }
     Enums: {
       feedback_severity: "FEEDBACK" | "ISSUE" | "NEEDS_ASSISTANCE"
