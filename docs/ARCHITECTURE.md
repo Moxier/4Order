@@ -65,6 +65,12 @@ nonblank operational lines, rate-limits by table, and returns the original
 result for an idempotent retry. Customer text is stored unchanged and rendered
 as text, never as HTML.
 
+The route reads and counts request bytes directly before JSON parsing. Its
+origin guard compares scheme, hostname, and port against an explicit deployment
+allowlist. Forwarded host/protocol headers are accepted only when
+`TRUST_PROXY_HEADERS=true`; that mode requires an ingress which overwrites both
+headers and rejects ambiguous comma-separated chains.
+
 ### Staff traffic
 
 Staff sign in with Supabase email/password authentication. Sessions are held in
@@ -98,12 +104,19 @@ narrow public endpoints, controlled staff provisioning, and server jobs.
 - Customer submissions carry client-generated UUID idempotency keys. Unique
   constraints make retries return the original result instead of inserting a
   duplicate.
+- Orders store an immutable SHA-256 fingerprint of the QR token used for the
+  accepted request. A committed request can therefore recover its original
+  receipt with the same token, text, and idempotency key after QR rotation or
+  table disable; a new request using that obsolete token is rejected.
 - Order numbers use a PostgreSQL sequence. Gaps are acceptable; uniqueness and
   stable human-readable references matter more than gapless numbering.
 - Monetary values are non-negative integer satang (`bigint`), never floating
   point.
 - Original order text and line text are immutable source fields. Corrections or
   pricing never overwrite them.
+- Stable receipt/source fields, including `order_number`, IDs, session binding,
+  idempotency key, token fingerprint, and creation timestamps, are protected by
+  triggers. Authenticated SQL grants expose only operational update columns.
 - Cancellation and dismissal use statuses; operational records are not hard
   deleted.
 - Important staff changes are recorded in `audit_logs` with actor, action,
@@ -132,7 +145,8 @@ created.
 
 ## Deployment
 
-- Web: a Node.js 20.9+ host suitable for Next.js 16 (for example Vercel).
+- Web: a Node.js 22+ host suitable for the pinned Next.js and pnpm toolchain
+  (for example Vercel).
 - Data/Auth: one Supabase project in a nearby region.
 - Schema: migrations are committed under `supabase/migrations` and applied with
   the Supabase CLI. Production schema changes do not originate in the dashboard.

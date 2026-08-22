@@ -3,13 +3,14 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const migration = readFileSync(
-  join(
-    process.cwd(),
-    "supabase/migrations/202608210003_customer_ordering.sql",
-  ),
-  "utf8",
-);
+const migration = [
+  "202608210003_customer_ordering.sql",
+  "202608220001_phase_2_hardening.sql",
+]
+  .map((file) =>
+    readFileSync(join(process.cwd(), "supabase/migrations", file), "utf8"),
+  )
+  .join("\n");
 
 describe("Phase 2 customer-order migration", () => {
   it("locks both the idempotency key and restaurant table before mutation", () => {
@@ -43,5 +44,13 @@ describe("Phase 2 customer-order migration", () => {
     expect(migration).toContain("customer_order_idempotency_conflict");
     expect(migration).toContain("is_duplicate");
     expect(migration).toContain("recent_order_count >= 5");
+  });
+
+  it("authenticates retries with a token fingerprint before current QR validation", () => {
+    expect(migration).toContain("submission_table_token_hash");
+    expect(migration).toContain("extensions.digest(p_table_token, 'sha256')");
+    expect(migration).toMatch(
+      /where orders\.idempotency_key = p_idempotency_key[\s\S]*if found[\s\S]*where restaurant_tables\.public_token = p_table_token/,
+    );
   });
 });

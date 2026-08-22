@@ -172,6 +172,7 @@ export type Database = {
           preparing_at: string | null
           session_id: string
           status: Database["public"]["Enums"]["order_status"]
+          submission_table_token_hash: string
           updated_at: string
         }
         Insert: {
@@ -186,6 +187,7 @@ export type Database = {
           preparing_at?: string | null
           session_id: string
           status?: Database["public"]["Enums"]["order_status"]
+          submission_table_token_hash: string
           updated_at?: string
         }
         Update: {
@@ -200,6 +202,7 @@ export type Database = {
           preparing_at?: string | null
           session_id?: string
           status?: Database["public"]["Enums"]["order_status"]
+          submission_table_token_hash?: string
           updated_at?: string
         }
         Relationships: [

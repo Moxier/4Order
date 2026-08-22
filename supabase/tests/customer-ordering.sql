@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(21);
+select plan(25);
 
 select has_function(
   'public',
@@ -276,6 +276,73 @@ select is(
   ),
   5::bigint,
   'rate limiting does not insert the rejected order'
+);
+
+create temporary table rotated_qr_order as
+select
+  restaurant_tables.public_token as original_token,
+  submitted.*
+from public.restaurant_tables
+cross join lateral public.submit_customer_order(
+  restaurant_tables.public_token,
+  'โรตี 1',
+  '63000000-0000-0000-0000-000000000001'
+) as submitted
+where restaurant_tables.name = 'โต๊ะ 01';
+
+update public.restaurant_tables
+set public_token = private.generate_table_token()
+where name = 'โต๊ะ 01';
+
+create temporary table rotated_qr_retry as
+select *
+from public.submit_customer_order(
+  (select original_token from rotated_qr_order),
+  'โรตี 1',
+  '63000000-0000-0000-0000-000000000001'
+);
+
+select is(
+  (select order_number from rotated_qr_retry),
+  (select order_number from rotated_qr_order),
+  'a committed request keeps its receipt after QR rotation'
+);
+
+select is(
+  (select is_duplicate from rotated_qr_retry),
+  true,
+  'the post-rotation recovery is marked as an idempotent retry'
+);
+
+select throws_ok(
+  $$
+    select *
+    from public.submit_customer_order(
+      (select original_token from rotated_qr_order),
+      'โรตีเพิ่ม 1',
+      '63000000-0000-0000-0000-000000000002'
+    )
+  $$,
+  'P0001'::char(5),
+  'customer_order_invalid_table',
+  'the rotated QR token cannot create a new order'
+);
+
+update public.restaurant_tables
+set enabled = false
+where name = 'โต๊ะ 01';
+
+select is(
+  (
+    select is_duplicate
+    from public.submit_customer_order(
+      (select original_token from rotated_qr_order),
+      'โรตี 1',
+      '63000000-0000-0000-0000-000000000001'
+    )
+  ),
+  true,
+  'a committed request remains recoverable after the table is disabled'
 );
 
 select * from finish();

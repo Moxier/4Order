@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(28);
+select plan(29);
 
 select has_table('public', 'staff_profiles', 'staff_profiles exists');
 select has_table('public', 'restaurant_tables', 'restaurant_tables exists');
@@ -111,13 +111,21 @@ insert into public.orders (
   id,
   session_id,
   original_text,
-  idempotency_key
+  idempotency_key,
+  submission_table_token_hash
 )
 values (
   '20000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000001',
   E'ข้าวหมกไก่ 2\nซุปหางวัว 1',
-  '30000000-0000-0000-0000-000000000001'
+  '30000000-0000-0000-0000-000000000001',
+  encode(
+    extensions.digest(
+      (select public_token from public.restaurant_tables where name = 'โต๊ะ 01'),
+      'sha256'
+    ),
+    'hex'
+  )
 );
 
 insert into public.order_lines (
@@ -153,6 +161,17 @@ select throws_ok(
   'P0001'::char(5),
   'customer order source fields are immutable',
   'customer order source text cannot be overwritten'
+);
+
+select throws_ok(
+  $$
+    update public.orders
+    set order_number = order_number + 1000
+    where id = '20000000-0000-0000-0000-000000000001'
+  $$,
+  'P0001'::char(5),
+  'customer order source fields are immutable',
+  'the stable customer receipt number cannot be overwritten'
 );
 
 select throws_ok(

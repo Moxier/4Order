@@ -6,24 +6,22 @@ import {
   customerOrderInputSchema,
   customerOrderTextSchema,
 } from "@/modules/customer/schema";
+import {
+  loadCustomerDraft,
+  removeCustomerDraft,
+  saveCustomerDraft,
+  type DraftStorageLevel,
+} from "@/modules/customer/draft-storage";
+import {
+  CustomerSubmissionError,
+  type OrderResult,
+  submitCustomerOrderRequest,
+} from "@/modules/customer/submission";
 
 type CustomerOrderFlowProps = {
   tableName: string;
   tableToken: string;
 };
-
-type OrderResult = {
-  duplicate: boolean;
-  orderNumber: number;
-  tableName: string;
-};
-
-type StoredDraft = {
-  idempotencyKey: string;
-  originalText: string;
-};
-
-class SubmissionError extends Error {}
 
 export function CustomerOrderFlow({
   tableName,
@@ -36,21 +34,14 @@ export function CustomerOrderFlow({
   const [hydrated, setHydrated] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [storageLevel, setStorageLevel] =
+    useState<DraftStorageLevel>("local");
   const [result, setResult] = useState<OrderResult | null>(null);
   const inFlight = useRef(false);
 
   useEffect(() => {
     let active = true;
-    let restoredDraft: StoredDraft | null = null;
-
-    try {
-      const savedValue = window.localStorage.getItem(storageKey);
-      if (savedValue) {
-        restoredDraft = JSON.parse(savedValue) as StoredDraft;
-      }
-    } catch {
-      restoredDraft = null;
-    }
+    const restoredDraft = loadCustomerDraft(window, storageKey);
 
     const restoredInput = customerOrderInputSchema.safeParse({
       tableToken,
@@ -83,13 +74,19 @@ export function CustomerOrderFlow({
       return;
     }
 
-    const draft: StoredDraft = { idempotencyKey, originalText };
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(draft));
-    } catch {
-      // Storage can be unavailable in privacy modes. The in-memory draft still
-      // remains usable for the current page session.
-    }
+    const level = saveCustomerDraft(window, storageKey, {
+      idempotencyKey,
+      originalText,
+    });
+    let active = true;
+    queueMicrotask(() => {
+      if (active) {
+        setStorageLevel(level);
+      }
+    });
+    return () => {
+      active = false;
+    };
   }, [hydrated, idempotencyKey, originalText, screen, storageKey]);
 
   function reviewOrder() {
@@ -125,37 +122,43 @@ export function CustomerOrderFlow({
     setErrorMessage(null);
 
     try {
-      const response = await fetch("/api/customer/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsedInput.data),
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | OrderResult
-        | { error?: string; message?: string }
-        | null;
+      let payload: OrderResult;
+      try {
+        payload = await submitCustomerOrderRequest(parsedInput.data);
+      } catch (error) {
+        if (
+          !(error instanceof CustomerSubmissionError) ||
+          error.code !== "IDEMPOTENCY_CONFLICT"
+        ) {
+          throw error;
+        }
 
-      if (!response.ok || !payload || !("orderNumber" in payload)) {
-        throw new SubmissionError(
-          payload && "message" in payload && payload.message
-            ? payload.message
-            : "ยังส่งออเดอร์ไม่ได้ กรุณาลองอีกครั้ง",
+        // A persisted key can outlive the text it originally represented when
+        // browser storage partially fails. Rotate only the conflicting key,
+        // preserve the exact text, persist the repaired draft when possible,
+        // and retry once through the normal timeout/retry path.
+        const recoveredKey = createIdempotencyKey();
+        setIdempotencyKey(recoveredKey);
+        setStorageLevel(
+          saveCustomerDraft(window, storageKey, {
+            idempotencyKey: recoveredKey,
+            originalText,
+          }),
         );
+        payload = await submitCustomerOrderRequest({
+          ...parsedInput.data,
+          idempotencyKey: recoveredKey,
+        });
       }
 
       setResult(payload);
       setScreen("success");
-      try {
-        window.localStorage.removeItem(storageKey);
-      } catch {
-        // A successful server receipt is authoritative even if local storage
-        // cannot be cleared by the browser.
-      }
+      removeCustomerDraft(window, storageKey);
     } catch (error) {
       setErrorMessage(
-        error instanceof SubmissionError
+        error instanceof CustomerSubmissionError
           ? error.message
-          : "การเชื่อมต่อขัดข้อง รายการของคุณยังอยู่ในเครื่อง กรุณาลองอีกครั้ง",
+          : "การเชื่อมต่อขัดข้อง รายการของคุณยังอยู่ กรุณาลองอีกครั้ง",
       );
     } finally {
       inFlight.current = false;
@@ -183,6 +186,16 @@ export function CustomerOrderFlow({
       </header>
 
       <section className="mt-4 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm sm:p-7">
+        {storageLevel !== "local" && screen !== "success" ? (
+          <p
+            className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900"
+            role="status"
+          >
+            {storageLevel === "session"
+              ? "อุปกรณ์นี้บันทึกรายการได้เฉพาะแท็บนี้ กรุณาอย่าปิดแท็บจนกว่าจะส่งสำเร็จ"
+              : "อุปกรณ์นี้ปิดการบันทึกข้อมูล รายการยังอยู่ในหน้านี้ กรุณาอย่าปิดหรือรีเฟรชจนกว่าจะส่งสำเร็จ"}
+          </p>
+        ) : null}
         {screen === "edit" ? (
           <>
             <div className="flex items-baseline justify-between gap-4">
@@ -236,7 +249,11 @@ export function CustomerOrderFlow({
                 onClick={submitOrder}
                 type="button"
               >
-                {submitting ? "กำลังส่งออเดอร์..." : "ยืนยันส่งออเดอร์"}
+                {submitting
+                  ? "กำลังส่งออเดอร์..."
+                  : errorMessage
+                    ? "ลองส่งออเดอร์เดิมอีกครั้ง"
+                    : "ยืนยันส่งออเดอร์"}
               </button>
               <button
                 className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-[var(--border)] px-5 font-semibold text-[var(--foreground)] disabled:opacity-50"

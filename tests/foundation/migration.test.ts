@@ -6,7 +6,8 @@ import { describe, expect, it } from "vitest";
 const migration = [
   "202608210001_foundation.sql",
   "202608210002_api_grants.sql",
-  "202608210003_customer_ordering.sql",
+    "202608210003_customer_ordering.sql",
+    "202608220001_phase_2_hardening.sql",
 ]
   .map((file) => readFileSync(join(process.cwd(), "supabase/migrations", file), "utf8"))
   .join("\n");
@@ -54,6 +55,9 @@ describe("foundation migration", () => {
     expect(migration).toContain("create trigger order_lines_preserve_customer_text");
     expect(migration).toContain("customer order source fields are immutable");
     expect(migration).toContain("customer order line source fields are immutable");
+    expect(migration).toContain("new.order_number is distinct from old.order_number");
+    expect(migration).toMatch(/revoke update on public\.orders from authenticated/);
+    expect(migration).toMatch(/grant update \([\s\S]*status,[\s\S]*\) on public\.orders to authenticated/);
   });
 
   it("does not grant an anonymous public-table policy", () => {

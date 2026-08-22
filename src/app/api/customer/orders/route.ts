@@ -3,12 +3,24 @@ import {
   acceptsJsonRequest,
   isSameOriginRequest,
 } from "@/modules/customer/request-security";
+import {
+  InvalidJsonBodyError,
+  readLimitedJsonBody,
+  RequestBodyTooLargeError,
+} from "@/modules/customer/request-body";
 import { customerOrderInputSchema } from "@/modules/customer/schema";
+import { getServerEnvironment } from "@/shared/env/server";
 
 const maximumRequestBytes = 12_000;
 
 export async function POST(request: Request) {
-  if (!isSameOriginRequest(request)) {
+  const environment = getServerEnvironment();
+  if (
+    !isSameOriginRequest(request, {
+      trustedOrigins: environment.TRUSTED_APP_ORIGINS,
+      trustProxyHeaders: environment.TRUST_PROXY_HEADERS,
+    })
+  ) {
     return jsonError(403, "FORBIDDEN", "คำขอนี้ไม่ได้มาจากหน้า 4Order");
   }
 
@@ -16,15 +28,16 @@ export async function POST(request: Request) {
     return jsonError(415, "UNSUPPORTED_MEDIA_TYPE", "รูปแบบคำขอไม่ถูกต้อง");
   }
 
-  const contentLength = Number(request.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength > maximumRequestBytes) {
-    return jsonError(413, "ORDER_TOO_LARGE", "รายการอาหารยาวเกินไป");
-  }
-
   let untrustedInput: unknown;
   try {
-    untrustedInput = await request.json();
-  } catch {
+    untrustedInput = await readLimitedJsonBody(request, maximumRequestBytes);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return jsonError(413, "ORDER_TOO_LARGE", "รายการอาหารยาวเกินไป");
+    }
+    if (!(error instanceof InvalidJsonBodyError)) {
+      console.error("Unexpected request-body read failure", error);
+    }
     return jsonError(400, "INVALID_JSON", "ไม่สามารถอ่านรายการอาหารได้");
   }
 

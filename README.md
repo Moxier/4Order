@@ -17,13 +17,14 @@ See [the architecture](docs/ARCHITECTURE.md),
 - Vitest, ESLint, and TypeScript verification
 - pnpm package management
 
-Next.js 16 requires Node.js 20.9 or newer.
+The application framework supports Node.js 20.9+, but this repository uses
+pnpm 11 tooling and therefore requires Node.js 22 or newer.
 
 ## Local development
 
 ### Prerequisites
 
-- Node.js 20.9+
+- Node.js 22+
 - pnpm 11+
 - Docker Desktop or another Docker-compatible runtime supported by the
   Supabase CLI
@@ -52,7 +53,9 @@ Next.js 16 requires Node.js 20.9 or newer.
 4. Copy `.env.example` to `.env.local`. Run `pnpm supabase status` and copy the
    local API URL, publishable/anonymous key, and service-role key into the
    matching variables. Set a development-only password of at least 12
-   characters in `DEMO_STAFF_PASSWORD`.
+   characters in `DEMO_STAFF_PASSWORD`. Keep `TRUST_PROXY_HEADERS=false` for
+   direct local development and list every exact local application origin in
+   `TRUSTED_APP_ORIGINS`.
 
 5. Provision the local demo staff accounts:
 
@@ -134,6 +137,16 @@ Run database verification separately while local Supabase is active:
 pnpm db:reset
 pnpm db:lint
 pnpm db:test
+pnpm db:test:concurrency
+```
+
+Run the real HTTP and browser retry suite against a production build while
+local Supabase is active:
+
+```bash
+pnpm exec playwright install chromium
+pnpm build
+pnpm test:e2e
 ```
 
 ## Production deployment
@@ -161,6 +174,9 @@ pnpm db:test
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY` (server-only; required by customer ordering)
+   - `TRUSTED_APP_ORIGINS` (comma-separated exact HTTPS application origins)
+   - `TRUST_PROXY_HEADERS` (normally `false`; enable only behind an ingress
+     that overwrites forwarded host/protocol headers)
 
 5. Configure the production Supabase Auth site URL and allowed redirect URLs to
    the exact HTTPS application origin.
@@ -184,6 +200,11 @@ values ('AUTH-USER-UUID', 'ชื่อผู้ดูแล', 'ADMIN');
 - `SUPABASE_SERVICE_ROLE_KEY`, `.env.local`, and real passwords must never be
   committed or exposed through `NEXT_PUBLIC_` variables.
 - Customer order text is untrusted, size-limited in the database, and immutable.
+- Customer request bodies are limited by UTF-8 bytes actually read, not only by
+  the caller-provided `Content-Length` header.
+- Same-origin checks compare the complete origin against an explicit allowlist.
+  Forwarded headers are ignored unless a trusted-proxy deployment policy is
+  deliberately enabled.
 - Money is stored as integer satang.
 
 ## Current scope
